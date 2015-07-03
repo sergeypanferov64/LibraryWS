@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:sws="http://www.springframework.org/schema/web-services"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/web-services
+        http://www.springframework.org/schema/web-services/web-services-2.0.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd
+        http://www.springframework.org/schema/aop 
+	http://www.springframework.org/schema/aop/spring-aop-4.0.xsd
+	http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx-4.0.xsd">
+
+    
+    <context:component-scan base-package="ru.spanferov.library"/>
+
+    <sws:annotation-driven/>
+    
+    
+    <!-- Define WSDL auto generation -->
+    <sws:dynamic-wsdl id="books"
+                      portTypeName="Library"
+                      locationUri="/bookService/" 
+                      targetNamespace="http://spanferov.ru/library/web-service">
+        <sws:xsd location="/WEB-INF/books.xsd"/>
+    </sws:dynamic-wsdl>
+
+        
+    <!-- DB PROPERTIES -->
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="location">
+            <value>WEB-INF/classes/config/database/properties/database.properties</value>
+        </property>
+    </bean>
+ 
+    
+    <!-- DATA SOURCE PROPERTIES -->
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName" value="${jdbc.driverClassName}" />
+        <property name="url" value="${jdbc.url}" />
+        <property name="username" value="${jdbc.username}" />
+        <property name="password" value="${jdbc.password}" />
+    </bean>
+    
+    
+    <!-- Hibernate session factory -->
+    <bean id="sessionFactory" class="org.springframework.orm.hibernate4.LocalSessionFactoryBean">
+ 
+        <property name="dataSource">
+            <ref bean="dataSource"/>
+        </property>
+ 
+        <property name="hibernateProperties">
+            <props>
+                <prop key="hibernate.dialect">org.hibernate.dialect.PostgreSQLDialect</prop>
+                <prop key="hibernate.show_sql">true</prop>
+                <prop key="hibernate.default_schema">public</prop>
+                <prop key="hibernate.hbm2ddl.auto">update</prop>
+                <prop key="hibernate.cache.provider_class">org.hibernate.cache.internal.NoCacheProvider</prop>
+            </props>
+        </property>
+ 
+        <property name="annotatedClasses">
+            <list>
+                <value>ru.spanferov.library.domain.Author</value>
+                <value>ru.spanferov.library.domain.Book</value>
+                <value>ru.spanferov.library.domain.BookInstance</value>
+                <value>ru.spanferov.library.domain.Order</value>
+                <value>ru.spanferov.library.domain.OrderEntry</value>
+                <value>ru.spanferov.library.domain.User</value>
+            </list>
+        </property>
+ 
+    </bean>
+
+        
+    <!-- MUST have transaction manager, using aop and aspects  -->
+    <bean id="transactionManager" class="org.springframework.orm.hibernate4.HibernateTransactionManager">
+        <property name="sessionFactory" ref="sessionFactory"></property>
+    </bean>
+ 
+    <tx:advice id="txAdvice" transaction-manager="transactionManager">
+        <tx:attributes>
+            <tx:method name="get*" read-only="true" />
+            <tx:method name="find*" read-only="true" />
+            <tx:method name="*" />
+        </tx:attributes>
+    </tx:advice>
+ 
+    <aop:config>
+        <aop:pointcut id="userServicePointCut" expression="execution(* ru.spanferov.library.service.*Service.*(..))" />
+        <aop:advisor advice-ref="txAdvice" pointcut-ref="userServicePointCut" />
+    </aop:config>
+    
+    
+    <!-- INJECTIONS START -->
+    <bean id="userDAO" class="ru.spanferov.library.dao.impl.UserDAOImpl" >
+        <property name="sessionFactory" ref="sessionFactory" />
+    </bean>
+    
+    <bean id="bookDAO" class="ru.spanferov.library.dao.impl.BookDAOImpl" >
+        <property name="sessionFactory" ref="sessionFactory" />
+    </bean>
+    
+    <bean id="orderDAO" class="ru.spanferov.library.dao.impl.OrderDAOImpl" >
+        <property name="sessionFactory" ref="sessionFactory" />
+    </bean>
+        
+    <bean id="myUserDetailsService" class="ru.spanferov.library.service.MyUserDetailsService">
+        <property name="userDAO" ref="userDAO" />
+    </bean>
+    
+    <bean id="bookService" class="ru.spanferov.library.service.BookService">
+        <property name="bookDAO" ref="bookDAO" />
+        <property name="userDAO" ref="userDAO" />
+        <property name="orderDAO" ref="orderDAO" />
+    </bean>
+    
+    <bean id="orderService" class="ru.spanferov.library.service.OrderService">
+        <property name="orderDAO" ref="orderDAO" />
+    </bean>
+    
+    <bean id="userService" class="ru.spanferov.library.service.UserService">
+        <property name="userDAO" ref="userDAO" />
+    </bean>
+    <!-- INJECTIONS END -->
+    
+</beans>
